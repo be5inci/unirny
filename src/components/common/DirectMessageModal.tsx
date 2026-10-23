@@ -70,6 +70,7 @@ export function DirectMessageModal({
     let isMounted = true;
 
     async function initializeSession() {
+      if (!targetUser) return;
       setIsLoadingSession(true);
       try {
         const {
@@ -103,7 +104,7 @@ export function DirectMessageModal({
           .from("mentorships")
           .select("id, status")
           .or(
-            `and(mentee_id.eq.${user.id},mentor_id.eq.${targetUser.id}),and(mentee_id.eq.${targetUser.id},mentor_id.eq.${user.id})`
+            `and(mentee_id.eq.${user.id},mentor_id.eq.${targetUser?.id}),and(mentee_id.eq.${targetUser?.id},mentor_id.eq.${user.id})`
           )
           .order("created_at", { ascending: false })
           .limit(1);
@@ -120,7 +121,7 @@ export function DirectMessageModal({
             .from("mentorships")
             .insert({
               mentee_id: user.id,
-              mentor_id: targetUser.id,
+              mentor_id: targetUser?.id,
               focus_area: "Bireysel Mesajlaşma",
               status: "Active",
               start_date: new Date().toISOString(),

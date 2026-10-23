@@ -367,7 +367,9 @@ export default function MentorshipPage() {
                       <CardTitle className="text-xl flex items-center justify-center gap-1.5">
                         {mentor.name}
                         {mentor.purpose?.toLowerCase()?.includes('mentor') && (
-                          <ShieldCheck className="w-4 h-4 text-emerald-600 inline-block" title="Doğrulanmış Mentör" />
+                          <span title="Doğrulanmış Mentör">
+                            <ShieldCheck className="w-4 h-4 text-emerald-600 inline-block" />
+                          </span>
                         )}
                       </CardTitle>
                       <CardDescription>{mentor.major || 'Uzman'} {mentor.city ? `• ${mentor.city}` : ''}</CardDescription>
