@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { SendIcon, AlertTriangleIcon } from 'lucide-react';
+import { SendIcon, AlertTriangleIcon, Clock, CheckCircle, Loader2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { createClient } from '@/utils/supabase/client';
 import {
@@ -39,6 +39,7 @@ export default function MentorshipSessionPage({ params }: { params: Promise<{ id
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
   const supabase = createClient();
 
   const form = useForm({
@@ -130,8 +131,39 @@ export default function MentorshipSessionPage({ params }: { params: Promise<{ id
     };
   }, [sessionId, supabase]);
 
+  async function handleStatusUpdate(newStatus: 'Active' | 'Terminated') {
+    try {
+      const updateData: any = { status: newStatus };
+      if (newStatus === 'Active') {
+        updateData.start_date = new Date().toISOString();
+      }
+      const { error } = await supabase
+        .from('mentorships')
+        .update(updateData)
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      toast.success(newStatus === 'Active' ? 'Seans onaylandı ve başlatıldı!' : 'Seans reddedildi.');
+      setSession((prev: any) => ({ ...prev, status: newStatus }));
+      
+      // Bildirim
+      await supabase.from('notifications').insert({
+        user_id: session.mentee_id,
+        type: newStatus === 'Active' ? 'mentorship_accepted' : 'mentorship_rejected',
+        message: newStatus === 'Active' 
+          ? 'Mentörlük talebiniz mentörünüz tarafından onaylandı! Artık seansa katılabilirsiniz.' 
+          : 'Mentörlük talebiniz sonlandırıldı.',
+        related_entity_id: sessionId
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast.error('İşlem başarısız: ' + (err?.message || ''));
+    }
+  }
+
   async function onScoreSubmit(data: ScoreFormValues) {
-    if (!session || session.status === 'Terminated') return;
+    if (!session || session.status !== 'Active') return;
 
     // Puanı ekle
     const { error: insertError } = await supabase.from('mentorship_score_history').insert({
@@ -187,27 +219,55 @@ export default function MentorshipSessionPage({ params }: { params: Promise<{ id
   }
 
   async function sendMessage() {
-    if (!newMessage.trim() || !currentUser || session.status === 'Terminated') return;
-
     const msgText = newMessage.trim();
-    setNewMessage(''); // Hızlı UI tepkisi
+    if (!msgText || isSendingMessage || session?.status !== 'Active') return;
 
-    const { error } = await supabase.from('messages').insert({
-      session_id: sessionId,
-      sender_id: currentUser.id,
-      content: msgText
-    });
+    if (!sessionId || typeof sessionId !== 'string' || !sessionId.trim()) {
+      toast.error('Geçerli bir oturum kimliği (session_id) bulunamadı.');
+      return;
+    }
 
-    if (error) {
-      toast.error('Mesaj gönderilemedi.');
-      setNewMessage(msgText); // Hata durumunda geri yükle
+    setIsSendingMessage(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const senderId = user?.id || currentUser?.id;
+
+      if (!senderId) {
+        toast.error('Mesaj göndermek için oturum açmış olmalısınız.');
+        return;
+      }
+
+      setNewMessage(''); // Hızlı UI tepkisi
+
+      // DİKKAT: messages tablosunda receiver_id sütunu yoktur!
+      // Sadece session_id, sender_id ve content alanları hatasız gönderilmelidir.
+      const { error } = await supabase.from('messages').insert({
+        session_id: sessionId,
+        sender_id: senderId, // auth.uid()
+        content: msgText
+      });
+
+      if (error) {
+        console.error('Mesaj gönderim hatası:', error);
+        toast.error('Mesaj gönderilemedi: ' + error.message);
+        setNewMessage(msgText); // Hata durumunda geri yükle
+      }
+    } catch (err: any) {
+      console.error('Mesaj gönderme hatası:', err);
+      toast.error('Mesaj gönderilirken bir hata oluştu.');
+      setNewMessage(msgText);
+    } finally {
+      setIsSendingMessage(false);
     }
   }
 
   if (loading) return <div className="p-8 text-center">Yükleniyor...</div>;
   if (!session) return <div className="p-8 text-center">Mentörlük oturumu bulunamadı.</div>;
 
-  const isActive = session.status !== 'Terminated';
+  const isPending = session.status === 'Pending';
+  const isActive = session.status === 'Active';
+  const isTerminated = session.status === 'Terminated';
   const isMentor = currentUser?.id === session.mentor_id;
 
   return (
@@ -217,12 +277,45 @@ export default function MentorshipSessionPage({ params }: { params: Promise<{ id
           <h1 className="text-2xl font-bold">Mentörlük Süreci: {session.mentor?.name || 'Mentör'} & {session.mentee?.name || 'Danışan'}</h1>
           <p className="text-muted-foreground text-sm">Hedef Alan: {session.focus_area}</p>
         </div>
-        {!isActive ? (
-          <Badge variant="destructive" className="text-sm py-1 px-3">Süreç Sonlandı (Puan &lt; 50)</Badge>
+        {isPending ? (
+          <Badge variant="secondary" className="text-sm py-1 px-3 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+            Onay Bekliyor
+          </Badge>
+        ) : isTerminated ? (
+          <Badge variant="destructive" className="text-sm py-1 px-3">Süreç Sonlandı</Badge>
         ) : (
-          <Badge variant="default" className="text-sm py-1 px-3">Aktif Süreç</Badge>
+          <Badge variant="default" className="text-sm py-1 px-3 bg-emerald-600">Aktif Seans</Badge>
         )}
       </div>
+
+      {isPending && (
+        isMentor ? (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                <Clock className="w-4 h-4" /> Bu Seans Onay Bekliyor
+              </h3>
+              <p className="text-sm text-amber-700/90 dark:text-amber-400/90 mt-1">
+                Danışanınız seans talebinde bulundu. İletişimi ve oturumu başlatmak için talebi onaylayabilirsiniz.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button size="sm" variant="outline" onClick={() => handleStatusUpdate('Terminated')}>Talebi Reddet</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleStatusUpdate('Active')}>Talebi Onayla ve Başlat</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-center gap-3">
+            <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <h3 className="font-semibold text-amber-800 dark:text-amber-300">Talebiniz Mentör Onayı Bekliyor</h3>
+              <p className="text-sm text-amber-700/90 dark:text-amber-400/90 mt-1">
+                Mentörünüz bu talebi henüz onaylamadı. Onay verildiğinde sohbet ve seans bağlantısı aktif hale gelecektir.
+              </p>
+            </div>
+          </div>
+        )
+      )}
 
       <div className="grid md:grid-cols-3 gap-6 flex-1">
         {/* Sol Panel: Sohbet */}
@@ -268,7 +361,7 @@ export default function MentorshipSessionPage({ params }: { params: Promise<{ id
           <div className="p-4 border-t bg-background flex items-center gap-2">
             <Input 
               disabled={!isActive} 
-              placeholder={isActive ? "Mesajınızı yazın..." : "Sohbet arşive alındı."} 
+              placeholder={isPending ? "Mentör onayından sonra sohbet aktif olacaktır..." : isActive ? "Mesajınızı yazın..." : "Sohbet arşive alındı."} 
               className="flex-1"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
@@ -279,8 +372,12 @@ export default function MentorshipSessionPage({ params }: { params: Promise<{ id
                 }
               }}
             />
-            <Button disabled={!isActive || !newMessage.trim()} size="icon" onClick={sendMessage}>
-              <SendIcon className="w-4 h-4" />
+            <Button disabled={!isActive || !newMessage.trim() || isSendingMessage} size="icon" onClick={sendMessage}>
+              {isSendingMessage ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <SendIcon className="w-4 h-4" />
+              )}
             </Button>
           </div>
         </Card>

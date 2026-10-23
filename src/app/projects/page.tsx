@@ -24,7 +24,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { createClient } from '@/utils/supabase/client';
-import { Plus as PlusIcon } from 'lucide-react';
+import { Plus as PlusIcon, Loader2 } from 'lucide-react';
 
 const projectSchema = z.object({
   title: z.string().min(5, { message: 'Proje başlığı en az 5 karakter olmalıdır.' }),
@@ -92,7 +92,7 @@ export default function ProjectsPage() {
     const newProject = {
       title: data.title,
       summary: data.summary,
-      status: 'Upcoming',
+      status: 'Open',
       roles: data.roles.split(',').map(r => r.trim()),
       owner_id: currentUser.id,
     };
@@ -100,7 +100,7 @@ export default function ProjectsPage() {
     const { error } = await supabase.from('projects').insert(newProject);
     
     if (error) {
-      toast.error('İlan yayınlanırken bir hata oluştu.');
+      toast.error('İlan yayınlanırken bir hata oluştu: ' + error.message);
     } else {
       toast.success('Proje ilanı başarıyla yayınlandı!');
       setOpen(false);
@@ -174,8 +174,11 @@ export default function ProjectsPage() {
                   )}
                 />
                 <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>İptal</Button>
-                  <Button type="submit">İlanı Yayınla</Button>
+                  <Button type="button" variant="outline" disabled={form.formState.isSubmitting} onClick={() => setOpen(false)}>İptal</Button>
+                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    {form.formState.isSubmitting ? 'Yayınlanıyor...' : 'İlanı Yayınla'}
+                  </Button>
                 </div>
               </form>
             </Form>
@@ -205,8 +208,10 @@ export default function ProjectsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All">Tüm Durumlar</SelectItem>
-                  <SelectItem value="Upcoming">Yaklaşan (Upcoming)</SelectItem>
+                  <SelectItem value="Open">Alıma Açık (Open)</SelectItem>
+                  <SelectItem value="Closed">Alıma Kapalı (Closed)</SelectItem>
                   <SelectItem value="In Progress">Devam Eden (In Progress)</SelectItem>
+                  <SelectItem value="Upcoming">Yaklaşan (Upcoming)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -222,7 +227,9 @@ export default function ProjectsPage() {
                 <Card key={project.id} className="flex flex-col">
                   <CardHeader>
                     <div className="flex justify-between items-start mb-2">
-                      <Badge variant={project.status === 'In Progress' ? 'default' : 'secondary'}>{project.status}</Badge>
+                      <Badge variant={project.status === 'Open' ? 'default' : 'secondary'}>
+                        {project.status === 'Open' ? 'Alıma Açık' : project.status === 'Closed' ? 'Alıma Kapalı' : project.status}
+                      </Badge>
                     </div>
                     <CardTitle className="text-xl">{project.title}</CardTitle>
                     <CardDescription className="line-clamp-2">{project.summary}</CardDescription>
@@ -263,8 +270,8 @@ export default function ProjectsPage() {
                         <CardTitle className="text-lg">{project.title}</CardTitle>
                       </CardHeader>
                       <CardContent className="flex-1">
-                        <Badge variant={project.status === 'In Progress' ? 'default' : 'secondary'} className="mb-2">
-                          {project.status}
+                        <Badge variant={project.status === 'Open' ? 'default' : 'secondary'} className="mb-2">
+                          {project.status === 'Open' ? 'Alıma Açık' : project.status === 'Closed' ? 'Alıma Kapalı' : project.status}
                         </Badge>
                       </CardContent>
                       <CardFooter>

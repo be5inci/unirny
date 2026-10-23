@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Calendar, MapPin, Users, CheckCircle, Trash2, CreditCard, MessageSquare, QrCode, CalendarPlus, ChevronDown, ChevronUp, Check, X as XIcon, Send, Settings2 } from 'lucide-react';
+import { Calendar, MapPin, Users, CheckCircle, Trash2, CreditCard, MessageSquare, QrCode, CalendarPlus, ChevronDown, ChevronUp, Check, X as XIcon, Send, Settings2, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function EventsPage() {
@@ -140,34 +140,41 @@ export default function EventsPage() {
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreating) return;
     if (!user) return toast.error('Etkinlik oluşturmak için giriş yapmalısınız.');
     if (!formData.title || !formData.location || !formData.event_date) return toast.error('Zorunlu alanları doldurun.');
 
     setIsCreating(true);
-    const newEvent = {
-      creator_id: user.id,
-      title: formData.title,
-      category: formData.category,
-      description: formData.description,
-      location: formData.location,
-      event_date: new Date(formData.event_date).toISOString(),
-      quota: formData.quota ? parseInt(formData.quota) : null,
-      target_budget: formData.target_budget ? parseInt(formData.target_budget) : 0,
-      cost_per_person: formData.cost_per_person ? parseInt(formData.cost_per_person) : 0,
-      iban: formData.iban,
-      iban_name: formData.iban_name
-    };
+    try {
+      const newEvent = {
+        creator_id: user.id,
+        title: formData.title,
+        category: formData.category,
+        description: formData.description,
+        location: formData.location,
+        event_date: new Date(formData.event_date).toISOString(),
+        quota: formData.quota ? parseInt(formData.quota) : null,
+        target_budget: formData.target_budget ? parseInt(formData.target_budget) : 0,
+        cost_per_person: formData.cost_per_person ? parseInt(formData.cost_per_person) : 0,
+        iban: formData.iban,
+        iban_name: formData.iban_name
+      };
 
-    const { error } = await supabase.from('events').insert(newEvent);
-    if (error) {
-      toast.error('Oluşturulamadı: ' + error.message);
-    } else {
-      toast.success('Etkinlik oluşturuldu!');
-      setOpenCreate(false);
-      setFormData({ title: '', category: 'Buluşma', description: '', location: '', event_date: '', quota: '', target_budget: '', cost_per_person: '', iban: '', iban_name: '' });
-      loadData();
+      const { error } = await supabase.from('events').insert(newEvent);
+      if (error) {
+        toast.error('Oluşturulamadı: ' + error.message);
+      } else {
+        toast.success('Etkinlik oluşturuldu!');
+        setOpenCreate(false);
+        setFormData({ title: '', category: 'Buluşma', description: '', location: '', event_date: '', quota: '', target_budget: '', cost_per_person: '', iban: '', iban_name: '' });
+        loadData();
+      }
+    } catch (err: any) {
+      console.error('Etkinlik oluşturma hatası:', err);
+      toast.error('Bir hata oluştu: ' + (err?.message || 'Lütfen tekrar deneyin.'));
+    } finally {
+      setIsCreating(false);
     }
-    setIsCreating(false);
   };
 
   const handleRsvpToggle = async (eventId: string, currentlyRsvpd: boolean) => {
@@ -266,7 +273,7 @@ export default function EventsPage() {
           <p className="text-muted-foreground mt-1">Yaklaşan etkinlikleri keşfet veya bütçeli bir organizasyon başlat.</p>
         </div>
 
-        <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+        <Dialog open={openCreate} onOpenChange={(open) => { if (!isCreating) setOpenCreate(open); }}>
           <DialogTrigger render={<Button>Yeni Etkinlik Düzenle</Button>} />
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -337,8 +344,11 @@ export default function EventsPage() {
               </div>
 
               <div className="flex justify-end pt-4">
-                <Button type="button" variant="ghost" className="mr-2" onClick={() => setOpenCreate(false)}>İptal</Button>
-                <Button type="submit" disabled={isCreating}>{isCreating ? 'Oluşturuluyor...' : 'Etkinlik Oluştur'}</Button>
+                <Button type="button" variant="ghost" className="mr-2" disabled={isCreating} onClick={() => setOpenCreate(false)}>İptal</Button>
+                <Button type="submit" disabled={isCreating}>
+                  {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isCreating ? 'Oluşturuluyor...' : 'Etkinlik Oluştur'}
+                </Button>
               </div>
             </form>
           </DialogContent>

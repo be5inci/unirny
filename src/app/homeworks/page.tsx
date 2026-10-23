@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { toast } from 'sonner';
+import { cn } from 'cn';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -56,10 +57,23 @@ function HomeworksContent() {
       homework_ratings ( user_id, rating, is_helpful )
     `).order('created_at', { ascending: false });
     
-    if (filterExamType && filterExamType !== 'All') query = query.eq('exam_type', filterExamType);
-    if (searchCode) query = query.ilike('course_code', `%${searchCode}%`);
-    if (filterUniversity) query = query.ilike('university', `%${filterUniversity}%`);
-    if (filterFaculty) query = query.ilike('faculty', `%${filterFaculty}%`);
+    if (filterExamType && filterExamType !== 'All') {
+      const typeVal = filterExamType.trim();
+      const lower = typeVal.toLowerCase();
+      if (typeVal === 'Çözüm' || lower === 'çözüm' || lower === 'cozum' || lower === 'solution') {
+        // Multi-column and case-insensitive matching for 'Çözüm' / 'cozum' / 'solution'
+        query = query.or('exam_type.ilike.%Çözüm%,type.ilike.%Çözüm%,exam_type.ilike.%çözüm%,type.ilike.%çözüm%,exam_type.ilike.%cozum%,type.ilike.%cozum%,exam_type.ilike.%solution%,type.ilike.%solution%');
+      } else if (typeVal === 'Ödev' || typeVal.startsWith('Ödev')) {
+        query = query.or('exam_type.ilike.%Ödev%,type.ilike.%Ödev%,exam_type.ilike.%ödev%,type.ilike.%ödev%,exam_type.ilike.%odev%,type.ilike.%odev%');
+      } else if (typeVal === 'Ders Notu') {
+        query = query.or('exam_type.ilike.%Ders Notu%,type.ilike.%Ders Notu%,exam_type.ilike.%ders notu%,type.ilike.%ders notu%');
+      } else {
+        query = query.or(`exam_type.ilike.%${typeVal}%,type.ilike.%${typeVal}%`);
+      }
+    }
+    if (searchCode) query = query.ilike('course_code', `%${searchCode.trim()}%`);
+    if (filterUniversity) query = query.ilike('university', `%${filterUniversity.trim()}%`);
+    if (filterFaculty) query = query.ilike('faculty', `%${filterFaculty.trim()}%`);
 
     const { data: hwData, error: hwError } = await query;
 
@@ -74,9 +88,13 @@ function HomeworksContent() {
         const avgRating = ratingCount > 0 ? (totalRating / ratingCount).toFixed(1) : '0.0';
         const helpfulCount = ratings.filter((r: any) => r.is_helpful).length;
         const userRating = user ? ratings.find((r: any) => r.user_id === user.id) : null;
+        const normalizedCategory = (hw.exam_type || hw.type || 'Diğer').trim();
 
         return {
           ...hw,
+          category: normalizedCategory,
+          exam_type: normalizedCategory,
+          type: normalizedCategory,
           uploader: profiles?.find(p => p.id === hw.uploader_id),
           avgRating,
           ratingCount,
@@ -126,6 +144,7 @@ function HomeworksContent() {
         .from('homework_files')
         .getPublicUrl(filePath);
 
+      const categoryValue = (formData.exam_type || 'Vize').trim();
       const newHomework = {
         uploader_id: user.id,
         title: formData.title.trim(),
@@ -134,8 +153,8 @@ function HomeworksContent() {
         department: formData.department.trim(),
         university: formData.university.trim(),
         faculty: formData.faculty.trim(),
-        exam_type: formData.exam_type,
-        type: formData.exam_type, // Maintain backwards compatibility
+        exam_type: categoryValue,
+        type: categoryValue, // Maintain backwards compatibility with legacy schema
         file_url: publicUrl
       };
 
@@ -322,15 +341,47 @@ function HomeworksContent() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="All">Tüm Türler</SelectItem>
+              <SelectItem value="Çözüm">Çözüm</SelectItem>
               <SelectItem value="Ders Notu">Ders Notu</SelectItem>
               <SelectItem value="Vize">Vize</SelectItem>
               <SelectItem value="Final">Final</SelectItem>
               <SelectItem value="Büt">Büt</SelectItem>
               <SelectItem value="Ödev">Ödev / Proje</SelectItem>
-              <SelectItem value="Çözüm">Çözüm</SelectItem>
+              <SelectItem value="Diğer">Diğer</SelectItem>
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      {/* Kategori Filtre Butonları / Sekmeleri */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-6 scrollbar-none">
+        {[
+          { label: 'Tüm Kaynaklar', value: 'All' },
+          { label: 'Çözüm', value: 'Çözüm' },
+          { label: 'Ders Notu', value: 'Ders Notu' },
+          { label: 'Vize', value: 'Vize' },
+          { label: 'Final', value: 'Final' },
+          { label: 'Büt', value: 'Büt' },
+          { label: 'Ödev / Proje', value: 'Ödev' },
+          { label: 'Diğer', value: 'Diğer' },
+        ].map(cat => {
+          const isActive = filterExamType === cat.value || (cat.value === 'All' && (!filterExamType || filterExamType === 'All'));
+          return (
+            <Button
+              key={cat.value}
+              type="button"
+              variant={isActive ? "default" : "outline"}
+              size="sm"
+              className={cn(
+                "rounded-full text-xs h-8 px-3.5 transition-all cursor-pointer",
+                isActive ? "shadow-xs font-semibold" : "bg-card hover:bg-muted text-muted-foreground"
+              )}
+              onClick={() => setFilterExamType(cat.value)}
+            >
+              {cat.label}
+            </Button>
+          );
+        })}
       </div>
 
       {/* List */}
@@ -345,28 +396,33 @@ function HomeworksContent() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {homeworks.map(hw => (
-            <Card key={hw.id} className="flex flex-col hover:shadow-md transition-shadow relative">
-              {hw.is_verified && (
-                <div className="absolute -top-3 -right-3">
-                  <Badge className="bg-green-500 hover:bg-green-600 shadow-sm px-2 py-1 flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3" />
-                    Doğrulanmış
+            <Card key={hw.id} className="flex flex-col hover:shadow-md transition-shadow relative overflow-hidden">
+              <CardHeader className="pt-4 px-5 pb-2">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <Badge variant="outline" className="bg-primary/5 font-semibold text-xs px-2.5 py-0.5">
+                    {hw.course_code}
                   </Badge>
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    <Badge variant="secondary" className="font-medium text-xs px-2.5 py-0.5">
+                      {hw.exam_type || hw.type}
+                    </Badge>
+                    {hw.is_verified && (
+                      <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs px-2 py-0.5 flex items-center gap-1 text-xs font-medium">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Doğrulanmış
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-              )}
-              
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start mb-2">
-                  <Badge variant="outline" className="bg-primary/5">{hw.course_code}</Badge>
-                  <Badge variant="secondary">{hw.exam_type || hw.type}</Badge>
-                </div>
-                <CardTitle className="text-lg line-clamp-1" title={hw.title}>
+                <CardTitle className="text-lg font-semibold leading-normal line-clamp-1" title={hw.title}>
                   {hw.title}
                 </CardTitle>
-                <CardDescription className="line-clamp-2 min-h-[40px] mt-1">{hw.description || 'Açıklama yok'}</CardDescription>
+                <CardDescription className="line-clamp-2 min-h-[40px] mt-1 text-sm leading-relaxed">
+                  {hw.description || 'Açıklama yok'}
+                </CardDescription>
               </CardHeader>
               
-              <CardContent className="flex-1 pb-3 text-sm text-muted-foreground space-y-1.5">
+              <CardContent className="flex-1 px-5 pb-3 text-sm text-muted-foreground space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-foreground text-xs uppercase tracking-wider">Yükleyen:</span>
                   <span className="truncate">{hw.uploader?.name || 'Anonim'}</span>
@@ -396,7 +452,7 @@ function HomeworksContent() {
                 </div>
               </CardContent>
               
-              <CardFooter className="pt-3 border-t flex flex-col gap-3">
+              <CardFooter className="px-5 pt-3 pb-4 border-t flex flex-col gap-3">
                 <div className="flex w-full justify-between items-center">
                   <Button variant="outline" size="sm" className="flex-1 mr-2" onClick={() => handlePreview(hw)}>
                     <Eye className="w-4 h-4 mr-2" />

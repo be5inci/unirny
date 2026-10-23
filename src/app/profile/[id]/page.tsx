@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { DirectMessageModal } from "@/components/common/DirectMessageModal";
 import { User, BookOpen, MapPin, GraduationCap, Star, Award, Heart, MessageSquare, DownloadIcon } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { notFound, useParams } from "next/navigation";
@@ -13,6 +15,8 @@ export default function PublicProfilePage() {
   const params = useParams();
   const id = params.id as string;
   const [user, setUser] = useState<any>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isDmOpen, setIsDmOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
   
@@ -34,6 +38,9 @@ export default function PublicProfilePage() {
   useEffect(() => {
     async function fetchProfile() {
       if (!id) return;
+
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) setCurrentUserId(authUser.id);
       
       const { data, error } = await supabase
         .from('profiles')
@@ -112,6 +119,12 @@ export default function PublicProfilePage() {
                     )}
                   </p>
                 </div>
+                {currentUserId && currentUserId !== user?.id && (
+                  <Button onClick={() => setIsDmOpen(true)} className="gap-2 shrink-0">
+                    <MessageSquare className="w-4 h-4" />
+                    Mesaj Gönder
+                  </Button>
+                )}
               </div>
 
               {/* Badges & Stats */}
@@ -224,6 +237,11 @@ export default function PublicProfilePage() {
         </div>
       </Tabs>
 
+      <DirectMessageModal
+        isOpen={isDmOpen}
+        onClose={() => setIsDmOpen(false)}
+        targetUser={user}
+      />
     </div>
   );
 }

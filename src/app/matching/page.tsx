@@ -5,8 +5,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { DirectMessageModal } from '@/components/common/DirectMessageModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -47,6 +49,9 @@ export default function MatchingPage() {
   const [uniFilter, setUniFilter] = useState('');
 
   const [openMeetupModal, setOpenMeetupModal] = useState(false);
+  const [isSubmittingMeetup, setIsSubmittingMeetup] = useState(false);
+  const [selectedDmUser, setSelectedDmUser] = useState<any>(null);
+  const [isDmModalOpen, setIsDmModalOpen] = useState(false);
   const supabase = createClient();
 
   const form = useForm<MeetupFormValues>({
@@ -120,33 +125,43 @@ export default function MatchingPage() {
   }, [cityFilter, majorFilter, uniFilter, supabase]);
 
   async function onSubmitMeetup(data: MeetupFormValues) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error('Lütfen giriş yapın.');
-      return;
-    }
+    if (isSubmittingMeetup) return;
+    setIsSubmittingMeetup(true);
 
-    const { data: newMeetup, error } = await supabase.from('meetups').insert({
-      title: data.title,
-      description: data.description,
-      city: data.city,
-      date: new Date(data.date).toISOString(),
-      location: data.location,
-      creator_id: user.id
-    }).select().single();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Lütfen giriş yapın.');
+        return;
+      }
 
-    if (error || !newMeetup) {
-      toast.error('Buluşma oluşturulamadı.');
-    } else {
-      // Kurucuyu da RSVP'ye ekle
-      await supabase.from('meetup_attendees').insert({
-        meetup_id: newMeetup.id,
-        user_id: user.id
-      });
-      toast.success('Buluşma başarıyla oluşturuldu!');
-      setOpenMeetupModal(false);
-      form.reset();
-      loadData();
+      const { data: newMeetup, error } = await supabase.from('meetups').insert({
+        title: data.title,
+        description: data.description,
+        city: data.city,
+        date: new Date(data.date).toISOString(),
+        location: data.location,
+        creator_id: user.id
+      }).select().single();
+
+      if (error || !newMeetup) {
+        toast.error('Buluşma oluşturulamadı: ' + (error?.message || 'Bilinmeyen hata'));
+      } else {
+        // Kurucuyu da RSVP'ye ekle
+        await supabase.from('meetup_attendees').insert({
+          meetup_id: newMeetup.id,
+          user_id: user.id
+        });
+        toast.success('Buluşma başarıyla oluşturuldu!');
+        setOpenMeetupModal(false);
+        form.reset();
+        loadData();
+      }
+    } catch (err: any) {
+      console.error('Buluşma oluşturma hatası:', err);
+      toast.error('Bir hata oluştu: ' + (err?.message || 'Lütfen tekrar deneyin.'));
+    } finally {
+      setIsSubmittingMeetup(false);
     }
   }
 
@@ -249,7 +264,16 @@ export default function MatchingPage() {
                     </div>
                   </CardContent>
                   <CardFooter className="flex gap-2">
-                    <Button className="w-full" variant="default">Mesaj Gönder</Button>
+                    <Button 
+                      className="w-full" 
+                      variant="default"
+                      onClick={() => {
+                        setSelectedDmUser(profile);
+                        setIsDmModalOpen(true);
+                      }}
+                    >
+                      Mesaj Gönder
+                    </Button>
                   </CardFooter>
                 </Card>
               ))}
@@ -260,7 +284,7 @@ export default function MatchingPage() {
         <TabsContent value="meetups">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold">Şehrinizdeki Buluşmalar</h2>
-            <Dialog open={openMeetupModal} onOpenChange={setOpenMeetupModal}>
+            <Dialog open={openMeetupModal} onOpenChange={(open) => { if (!isSubmittingMeetup) setOpenMeetupModal(open); }}>
               <DialogTrigger
                 render={
                   <Button>
@@ -333,8 +357,23 @@ export default function MatchingPage() {
                       )}
                     />
                     <div className="flex justify-end gap-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => setOpenMeetupModal(false)}>İptal</Button>
-                      <Button type="submit">Buluşmayı Duyur</Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        disabled={isSubmittingMeetup || form.formState.isSubmitting} 
+                        onClick={() => setOpenMeetupModal(false)}
+                      >
+                        İptal
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={isSubmittingMeetup || form.formState.isSubmitting}
+                      >
+                        {(isSubmittingMeetup || form.formState.isSubmitting) && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        {(isSubmittingMeetup || form.formState.isSubmitting) ? 'Duyuruluyor...' : 'Buluşmayı Duyur'}
+                      </Button>
                     </div>
                   </form>
                 </Form>
@@ -380,6 +419,15 @@ export default function MatchingPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      <DirectMessageModal
+        isOpen={isDmModalOpen}
+        onClose={() => {
+          setIsDmModalOpen(false);
+          setSelectedDmUser(null);
+        }}
+        targetUser={selectedDmUser}
+      />
     </div>
   );
 }

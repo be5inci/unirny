@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,10 +18,12 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { createClient } from '@/utils/supabase/client';
+import { Loader2, Lock, Unlock } from 'lucide-react';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params);
   const projectId = unwrappedParams.id;
+  const router = useRouter();
   
   const [project, setProject] = useState<any>(null);
   const [applications, setApplications] = useState<any[]>([]);
@@ -28,6 +31,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [applyMessage, setApplyMessage] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   
   const supabase = createClient();
 
@@ -102,7 +106,35 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   }, [projectId, supabase]);
 
   const isOwner = currentUser?.id === project?.owner_id;
+  const isOpen = project?.status === 'Open' || project?.status?.toLowerCase() === 'open';
   const myApplication = !isOwner ? applications.find(a => a.user_id === currentUser?.id) : null;
+
+  async function toggleProjectStatus() {
+    if (!currentUser || !isOwner || isTogglingStatus) return;
+    setIsTogglingStatus(true);
+
+    const nextStatus = isOpen ? 'Closed' : 'Open';
+
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ status: nextStatus })
+        .eq('id', projectId);
+
+      if (error) {
+        toast.error('Alım durumu güncellenemedi: ' + error.message);
+      } else {
+        toast.success(nextStatus === 'Open' ? 'Proje alımlara açıldı.' : 'Proje alımlara kapatıldı.');
+        setProject((prev: any) => prev ? { ...prev, status: nextStatus } : prev);
+        router.refresh();
+      }
+    } catch (err: any) {
+      console.error('Alım durumu değiştirme hatası:', err);
+      toast.error('Bir hata oluştu: ' + (err?.message || 'Lütfen tekrar deneyin.'));
+    } finally {
+      setIsTogglingStatus(false);
+    }
+  }
 
   async function handleApply() {
     if (!currentUser) {
@@ -165,16 +197,35 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     <div className="container mx-auto px-4 py-8 max-w-5xl">
       <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
             <h1 className="text-3xl font-bold tracking-tight">{project.title}</h1>
-            <Badge variant={project.status === 'Open' ? 'default' : 'secondary'}>
-              {project.status === 'Open' ? 'Alıma Açık' : 'Alıma Kapalı'}
+            <Badge variant={isOpen ? 'default' : 'secondary'}>
+              {isOpen ? 'Alıma Açık' : 'Alıma Kapalı'}
             </Badge>
           </div>
           <p className="text-muted-foreground text-lg">{project.summary}</p>
         </div>
         
-        {!isOwner && (
+        {isOwner ? (
+          <div className="flex items-center gap-2">
+            <Button
+              variant={isOpen ? "outline" : "default"}
+              size="lg"
+              disabled={isTogglingStatus}
+              onClick={toggleProjectStatus}
+              className="font-medium flex items-center gap-2"
+            >
+              {isTogglingStatus ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isOpen ? (
+                <Lock className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <Unlock className="w-4 h-4" />
+              )}
+              {isOpen ? 'Alımları Kapat' : 'Alımları Aç'}
+            </Button>
+          </div>
+        ) : (
           <div>
             {myApplication ? (
               <Badge variant="outline" className="text-sm px-4 py-2">
@@ -187,8 +238,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger
                   render={
-                    <Button size="lg" disabled={project.status !== 'Open'}>
-                      {project.status === 'Open' ? 'Projeye Başvur' : 'Alıma Kapalı'}
+                    <Button size="lg" disabled={!isOpen}>
+                      {isOpen ? 'Projeye Başvur' : 'Alıma Kapalı'}
                     </Button>
                   }
                 />
