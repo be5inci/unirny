@@ -20,19 +20,9 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
   
-  // MOCK ACTIVITIES (In real app, we would fetch these by filtering by id)
-  const mockPosts = [
-    { id: '1', content: 'Supabase ile RLS politikalarını yapılandırmak çok eğlenceli.', created_at: new Date().toISOString(), likes_count: 5, comments_count: 1 },
-  ];
-
-  const mockHomeworks = [
-    { id: '1', title: 'İleri Algoritmalar - Final Özeti', category: 'Ders Notu', file_type: 'PDF', views: 230, downloads: 85, helpful: 45 },
-  ];
-
-  const mockEvents = [
-    { id: '1', title: 'Açık Kaynak Geliştiricileri Buluşması', date: new Date(Date.now() + 86400000*2).toISOString(), type: 'Buluşma', status: 'Katılımcı' },
-  ];
-
+  const [posts, setPosts] = useState<any[]>([]);
+  const [homeworks, setHomeworks] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
 
   useEffect(() => {
@@ -71,6 +61,17 @@ export default function PublicProfilePage() {
         
         const uniqueProjects = Array.from(new Map(myProjects.map(item => [item.id, item])).values());
         setProjects(uniqueProjects);
+
+        // Fetch user posts, homeworks, and events
+        const [{ data: userPosts }, { data: userHomeworks }, { data: userEvents }] = await Promise.all([
+          supabase.from('posts').select('*').eq('author_id', id).order('created_at', { ascending: false }),
+          supabase.from('homeworks').select('*').eq('uploader_id', id).order('created_at', { ascending: false }),
+          supabase.from('events').select('*').eq('creator_id', id).order('created_at', { ascending: false })
+        ]);
+
+        if (userPosts) setPosts(userPosts);
+        if (userHomeworks) setHomeworks(userHomeworks);
+        if (userEvents) setEvents(userEvents);
       } else {
         // User not found
         setLoading(false);
@@ -162,61 +163,61 @@ export default function PublicProfilePage() {
       {/* Activities Tabs */}
       <Tabs defaultValue="posts" className="w-full">
         <TabsList className="w-full justify-start border-b rounded-none h-12 bg-transparent overflow-x-auto overflow-y-hidden">
-          <TabsTrigger value="posts" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 shadow-none">Gönderiler</TabsTrigger>
-          <TabsTrigger value="homeworks" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 shadow-none">Kaynaklar</TabsTrigger>
-          <TabsTrigger value="events" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 shadow-none">Etkinlikler</TabsTrigger>
+          <TabsTrigger value="posts" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 shadow-none">Gönderiler ({posts.length})</TabsTrigger>
+          <TabsTrigger value="homeworks" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 shadow-none">Kaynaklar ({homeworks.length})</TabsTrigger>
+          <TabsTrigger value="events" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 shadow-none">Etkinlikler ({events.length})</TabsTrigger>
           <TabsTrigger value="projects" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 shadow-none">Projeler ({projects.length})</TabsTrigger>
         </TabsList>
         
         <div className="mt-6">
           <TabsContent value="posts" className="space-y-4">
-            {mockPosts.length > 0 ? mockPosts.map(post => (
+            {posts.length > 0 ? posts.map(post => (
               <Card key={post.id} className="hover:border-primary/50 transition-colors">
                 <CardContent className="p-4 flex flex-col gap-3">
                   <p className="text-sm">{post.content}</p>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span>{new Date(post.created_at).toLocaleDateString('tr-TR')}</span>
-                    <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {post.likes_count}</span>
-                    <span className="flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" /> {post.comments_count}</span>
+                    <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {post.likes_count || 0}</span>
+                    <span className="flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" /> {post.comments_count || 0}</span>
                   </div>
                 </CardContent>
               </Card>
-            )) : <p className="text-muted-foreground text-center py-8">Kullanıcı henüz gönderi paylaşmamış.</p>}
+            )) : <p className="text-muted-foreground text-center py-8">Henüz paylaşım yapılmadı.</p>}
           </TabsContent>
 
           <TabsContent value="homeworks" className="grid md:grid-cols-2 gap-4">
-            {mockHomeworks.length > 0 ? mockHomeworks.map(hw => (
+            {homeworks.length > 0 ? homeworks.map(hw => (
               <Card key={hw.id} className="hover:shadow-md transition-all">
                 <CardHeader className="p-4 pb-2">
                   <div className="flex justify-between items-start">
-                    <Badge variant="outline">{hw.category}</Badge>
-                    <Badge variant="secondary">{hw.file_type}</Badge>
+                    <Badge variant="outline">{hw.category || hw.course_code || 'Genel'}</Badge>
+                    <Badge variant="secondary">{hw.file_type || 'PDF'}</Badge>
                   </div>
                   <CardTitle className="text-lg mt-2">{hw.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-2">
                   <div className="flex justify-between text-xs text-muted-foreground border-t pt-3 mt-2">
-                    <span className="flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500" /> {hw.helpful} Faydalı</span>
-                    <span className="flex items-center gap-1"><DownloadIcon className="w-3.5 h-3.5" /> {hw.downloads} İndirme</span>
+                    <span className="flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-500" /> {hw.helpful_count || hw.helpful || 0} Faydalı</span>
+                    <span className="flex items-center gap-1"><DownloadIcon className="w-3.5 h-3.5" /> {hw.download_count || hw.downloads || 0} İndirme</span>
                   </div>
                 </CardContent>
               </Card>
-            )) : <p className="text-muted-foreground text-center py-8 col-span-2">Kullanıcı henüz kaynak yüklememiş.</p>}
+            )) : <p className="text-muted-foreground text-center py-8 col-span-2">Henüz bir kaynak yüklenmedi.</p>}
           </TabsContent>
 
           <TabsContent value="events" className="grid md:grid-cols-2 gap-4">
-            {mockEvents.length > 0 ? mockEvents.map(event => (
+            {events.length > 0 ? events.map(event => (
               <Card key={event.id}>
                 <CardHeader className="p-4">
                   <div className="flex justify-between items-center mb-1">
-                    <Badge variant={event.status === 'Organizatör' ? 'default' : 'secondary'}>{event.status}</Badge>
-                    <span className="text-xs text-muted-foreground">{new Date(event.date).toLocaleDateString('tr-TR')}</span>
+                    <Badge variant="default">{event.event_type || event.category || 'Etkinlik'}</Badge>
+                    <span className="text-xs text-muted-foreground">{new Date(event.event_date || event.created_at).toLocaleDateString('tr-TR')}</span>
                   </div>
                   <CardTitle className="text-md">{event.title}</CardTitle>
-                  <CardDescription>{event.type}</CardDescription>
+                  {event.description && <CardDescription className="line-clamp-2">{event.description}</CardDescription>}
                 </CardHeader>
               </Card>
-            )) : <p className="text-muted-foreground text-center py-8 col-span-2">Etkinlik geçmişi boş.</p>}
+            )) : <p className="text-muted-foreground text-center py-8 col-span-2">Katılınan veya düzenlenen etkinlik bulunmuyor.</p>}
           </TabsContent>
 
           <TabsContent value="projects" className="grid md:grid-cols-2 gap-4">

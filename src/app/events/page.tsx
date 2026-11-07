@@ -69,7 +69,7 @@ export default function EventsPage() {
 
     if (user) {
       const { data: profile } = await supabase.from('profiles').select('platform_role').eq('id', user.id).single();
-      if (profile?.platform_role === 'admin') setIsAdmin(true);
+      if (profile?.platform_role === 'admin' || profile?.platform_role === 'super_admin') setIsAdmin(true);
     }
 
     let query = supabase.from('events').select('*').order('event_date', { ascending: true });

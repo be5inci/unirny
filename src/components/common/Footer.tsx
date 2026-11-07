@@ -20,7 +20,7 @@ export function Footer() {
               <li><Link href="/about" className="hover:text-primary transition-colors">Hakkımızda</Link></li>
               <li><Link href="/projects" className="hover:text-primary transition-colors">Projeler</Link></li>
               <li><Link href="/mentorship" className="hover:text-primary transition-colors">Mentörlük</Link></li>
-              <li><Link href="/groups" className="hover:text-primary transition-colors">Gruplar</Link></li>
+              <li><Link href="/groups" className="hover:text-primary transition-colors">Topluluklar</Link></li>
             </ul>
           </div>
 

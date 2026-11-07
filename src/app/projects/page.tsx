@@ -53,11 +53,19 @@ export default function ProjectsPage() {
   });
 
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   async function loadProjects() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUser(user);
+
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('platform_role').eq('id', user.id).single();
+      if (profile?.platform_role) {
+        setUserRole(profile.platform_role);
+      }
+    }
 
     let query = supabase.from('projects').select('*').order('created_at', { ascending: false });
     
@@ -86,6 +94,11 @@ export default function ProjectsPage() {
   async function onSubmit(data: ProjectFormValues) {
     if (!currentUser) {
       toast.error('Önce giriş yapmalısınız!');
+      return;
+    }
+
+    if (userRole === 'viewer') {
+      toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
       return;
     }
 
@@ -118,10 +131,21 @@ export default function ProjectsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Projeler</h1>
           <p className="text-muted-foreground mt-1">Topluluk projelerini keşfedin veya kendi ekibinizi kurun.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(val) => {
+          if (val && userRole === 'viewer') {
+            toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+            return;
+          }
+          setOpen(val);
+        }}>
           <DialogTrigger
             render={
-              <Button>
+              <Button onClick={(e) => {
+                if (userRole === 'viewer') {
+                  e.preventDefault();
+                  toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+                }
+              }}>
                 <PlusIcon className="w-4 h-4 mr-2" />
                 Yeni Proje Oluştur
               </Button>

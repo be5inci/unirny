@@ -1,22 +1,25 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarIcon, MapPinIcon } from 'lucide-react';
+import { CalendarIcon, MapPinIcon, ArrowRight } from 'lucide-react';
 import AnnouncementBanner from '@/components/common/AnnouncementBanner';
+import { createClient } from '@/utils/supabase/server';
 
-const MOCK_EVENTS: Array<{ id: string; title: string; date: string; location: string; type: string; description?: string; speaker?: string }> = [
-  { id: 'e1', title: 'Yapay Zeka ve Gelecek Zirvesi', date: '15 Ekim 2026', location: 'Merkez Kampüs', type: 'Konferans' },
-  { id: 'e2', title: 'Web Geliştirme Bootcamp', date: '20 Ekim 2026', location: 'Online', type: 'Eğitim' },
-  { id: 'e3', title: 'Start-Up Pitch Day', date: '1 Kasım 2026', location: 'Teknokent', type: 'Yarışma' }
-];
+export default async function HomePage() {
+  const supabase = await createClient();
 
-const MOCK_ANNOUNCEMENTS = [
-  { id: 'a1', title: 'Yeni Mentörlük Programı Başlıyor!', date: 'Bugün', content: 'Sektör profesyonellerinden birebir destek almak için başvurular açıldı.', priority: 'High', tag: 'Program' },
-  { id: 'a2', title: 'Güz Dönemi Proje Destekleri', date: 'Dün', content: 'Topluluk projeleri için bütçe başvuru sonuçları açıklandı.', priority: 'Normal', tag: 'Duyuru' }
-];
+  const [{ data: events }, { data: announcements }, { data: showcaseItems }] = await Promise.all([
+    supabase.from('events').select('*').order('created_at', { ascending: false }).limit(6),
+    supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(6),
+    supabase.from('showcase_items').select('*').order('created_at', { ascending: false }).limit(6)
+  ]);
 
-export default function HomePage() {
+  const eventsList = events || [];
+  // Aktif olanları filtrele (is_active null veya undefined ise de göster)
+  const announcementsList = (announcements || []).filter((a: any) => a.is_active !== false);
+  const showcaseList = showcaseItems || [];
+
   return (
     <div className="container mx-auto px-4 py-8 space-y-16">
       <AnnouncementBanner />
@@ -43,34 +46,52 @@ export default function HomePage() {
         <section className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold tracking-tight">Yaklaşan Etkinlikler</h2>
+            <Link href="/events" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+              Tümünü Gör <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
           <div className="grid gap-4">
-            {MOCK_EVENTS.map(event => (
-              <Card key={event.id}>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-xl">{event.title}</CardTitle>
-                    <Badge variant={event.type === 'Online' ? 'secondary' : 'default'}>
-                      {event.type}
-                    </Badge>
-                  </div>
-                  <CardDescription className="flex items-center gap-2 mt-2">
-                    <CalendarIcon className="w-4 h-4" />
-                    {new Date(event.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
-                  </CardDescription>
-                  <CardDescription className="flex items-center gap-2">
-                    <MapPinIcon className="w-4 h-4" />
-                    {event.location}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{event.description}</p>
-                  {event.speaker && (
-                    <p className="text-sm font-medium mt-2">Konuşmacı: {event.speaker}</p>
-                  )}
-                </CardContent>
+            {eventsList.length === 0 ? (
+              <Card className="p-8 text-center border-dashed">
+                <p className="text-sm text-muted-foreground">Yaklaşan etkinlik bulunmuyor.</p>
               </Card>
-            ))}
+            ) : (
+              eventsList.map((event: any) => {
+                const eventDateVal = event.event_date || event.date;
+                return (
+                  <Card key={event.id} className="hover:border-primary/40 transition-colors">
+                    <CardHeader>
+                      <div className="flex justify-between items-start gap-2">
+                        <CardTitle className="text-xl">{event.title}</CardTitle>
+                        <Badge variant={event.category === 'Online' || event.type === 'Online' ? 'secondary' : 'default'}>
+                          {event.category || event.type || 'Etkinlik'}
+                        </Badge>
+                      </div>
+                      {eventDateVal && (
+                        <CardDescription className="flex items-center gap-2 mt-2">
+                          <CalendarIcon className="w-4 h-4" />
+                          {new Date(eventDateVal).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                        </CardDescription>
+                      )}
+                      {event.location && (
+                        <CardDescription className="flex items-center gap-2">
+                          <MapPinIcon className="w-4 h-4" />
+                          {event.location}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    {event.description && (
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{event.description}</p>
+                        {event.speaker && (
+                          <p className="text-sm font-medium mt-2">Konuşmacı: {event.speaker}</p>
+                        )}
+                      </CardContent>
+                    )}
+                  </Card>
+                );
+              })
+            )}
           </div>
         </section>
 
@@ -80,63 +101,79 @@ export default function HomePage() {
             <h2 className="text-2xl font-bold tracking-tight">Duyurular Panosu</h2>
           </div>
           <div className="grid gap-4">
-            {MOCK_ANNOUNCEMENTS.map(announcement => (
-              <Card key={announcement.id}>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">{announcement.title}</CardTitle>
-                    <Badge variant={announcement.priority === 'High' ? 'destructive' : 'secondary'}>
-                      {announcement.priority}
-                    </Badge>
-                  </div>
-                  <CardDescription>
-                    {new Date(announcement.date).toLocaleDateString('tr-TR')}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm">{announcement.content}</p>
-                  <div className="mt-4">
-                    <Badge variant="outline">{announcement.tag}</Badge>
-                  </div>
-                </CardContent>
+            {announcementsList.length === 0 ? (
+              <Card className="p-8 text-center border-dashed">
+                <p className="text-sm text-muted-foreground">Aktif duyuru bulunmuyor.</p>
               </Card>
-            ))}
+            ) : (
+              announcementsList.map((announcement: any) => (
+                <Card key={announcement.id} className="hover:border-primary/40 transition-colors">
+                  <CardHeader>
+                    <div className="flex justify-between items-start gap-2">
+                      <CardTitle className="text-lg">{announcement.title}</CardTitle>
+                      <Badge variant={announcement.type === 'warning' || announcement.priority === 'High' ? 'destructive' : 'secondary'}>
+                        {announcement.type === 'warning' ? 'Uyarı' : announcement.type === 'info' ? 'Bilgi' : (announcement.type || 'Duyuru')}
+                      </Badge>
+                    </div>
+                    {announcement.created_at && (
+                      <CardDescription>
+                        {new Date(announcement.created_at).toLocaleDateString('tr-TR')}
+                      </CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">{announcement.content}</p>
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </section>
       </div>
 
-      {/* Faaliyet Vitrini (Özet) */}
+      {/* Faaliyet Vitrini (Neler Yaptık?) */}
       <section className="space-y-6 pt-8">
-        <h2 className="text-2xl font-bold tracking-tight text-center">Neler Yaptık?</h2>
-        <div className="grid md:grid-cols-3 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Hackathon 2025</CardTitle>
-              <CardDescription>48 Saatlik Kodlama Maratonu</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">150+ katılımcı ile gerçekleşen hackathon etkinliğimizde birbirinden yenilikçi 20 proje geliştirildi.</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Sektör Buluşmaları</CardTitle>
-              <CardDescription>Yapay Zeka Semineri</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Endüstri liderlerinin katıldığı seminer serimizde yapay zekanın geleceği tartışıldı.</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Güz Kampı</CardTitle>
-              <CardDescription>Oryantasyon & Networking</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Yeni katılan üyelerimizle kaynaşma ve strateji planlama odaklı hafta sonu kampımız.</p>
-            </CardContent>
-          </Card>
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold tracking-tight">Neler Yaptık?</h2>
+          <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+            Topluluğumuz bünyesinde hayata geçirilen projeler, etkinlikler ve kazanımlar.
+          </p>
         </div>
+
+        {showcaseList.length === 0 ? (
+          <Card className="p-8 text-center border-dashed max-w-lg mx-auto">
+            <p className="text-sm text-muted-foreground">Henüz vitrin içeriği eklenmedi.</p>
+          </Card>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-6">
+            {showcaseList.map((item: any) => (
+              <Card key={item.id} className="hover:shadow-md transition-shadow flex flex-col justify-between">
+                <CardHeader>
+                  <div className="flex justify-between items-start gap-2">
+                    <CardTitle className="text-lg font-semibold">{item.title}</CardTitle>
+                    {item.metric && (
+                      <Badge variant="secondary" className="font-bold text-primary bg-primary/10 shrink-0">
+                        {item.metric}
+                      </Badge>
+                    )}
+                  </div>
+                  {item.description && (
+                    <CardDescription className="text-sm leading-relaxed mt-2 line-clamp-3">
+                      {item.description}
+                    </CardDescription>
+                  )}
+                </CardHeader>
+                {item.link && (
+                  <CardContent className="pt-0">
+                    <Button render={<Link href={item.link} />} variant="link" size="sm" className="px-0 text-primary flex items-center gap-1">
+                      İncele <ArrowRight className="w-3.5 h-3.5" />
+                    </Button>
+                  </CardContent>
+                )}
+              </Card>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

@@ -45,7 +45,7 @@ export default function AnnouncementBanner() {
     sessionStorage.setItem('dismissedAnnouncements', JSON.stringify(Array.from(newDismissed)));
   };
 
-  const visibleAnnouncements = announcements.filter(a => !dismissed.has(a.id));
+  const visibleAnnouncements = announcements.filter(a => !dismissed.has(a.id) && (a as any).is_active !== false);
 
   if (visibleAnnouncements.length === 0) return null;
 

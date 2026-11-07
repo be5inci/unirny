@@ -1,19 +1,46 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, ShieldCheck, Target, Lightbulb, Rocket } from 'lucide-react';
+import { Users, ShieldCheck, Target, Lightbulb, Rocket, BookOpen } from 'lucide-react';
+import { createClient } from '@/utils/supabase/server';
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const supabase = await createClient();
+  const { data: aboutData } = await supabase.from('site_about').select('*').single();
+
+  const title = aboutData?.title || 'Hakkımızda';
+  const subtitle = aboutData?.subtitle || 'unirny, üniversite öğrencilerinin fikirlerini projelere dönüştürdüğü, ekipler kurduğu ve deneyimli mentörlerle buluştuğu yenilikçi bir topluluk platformudur.';
+  const story = aboutData?.story || aboutData?.content || 'unirny, üniversite ekosistemini pratik, inovatif ve üretken bir kuluçka merkezine dönüştürmek amacıyla kurulmuştur. Öğrencilerin derslerde öğrendiklerini gerçek projelere aktarabilmesini ve sektör profesyonelleriyle erken aşamada bağ kurmasını hedefliyoruz.';
+  const mission = aboutData?.mission || 'Akademik sınırların ötesine geçerek öğrencileri pratik ve inovatif projeler etrafında birleştirmek. Teknolojiyi ve işbirliğini kullanarak, üniversite ekosistemini üretken bir kuluçka merkezine dönüştürmek istiyoruz.';
+  const vision = aboutData?.vision || 'Sadece bir üniversite kulübü değil, binlerce öğrencinin kariyer yolculuğuna yön veren, start-up ruhunu kampüs kültürüne entegre eden global standartlarda bir yetenek platformu olmak.';
+
   return (
     <div className="container mx-auto px-4 py-16 max-w-6xl space-y-20">
       
       {/* Hero Section */}
       <section className="text-center space-y-6">
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
-          Hakkımızda
+          {title}
         </h1>
-        <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
-          unirny, üniversite öğrencilerinin fikirlerini projelere dönüştürdüğü, ekipler kurduğu ve deneyimli mentörlerle buluştuğu yenilikçi bir topluluk platformudur.
-        </p>
+        {subtitle && (
+          <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
+            {subtitle}
+          </p>
+        )}
       </section>
+
+      {/* Hikaye / Hakkımızda Bölümü */}
+      {story && (
+        <section className="bg-card border rounded-2xl p-8 md:p-12 shadow-sm space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight">Biz Kimiz & Hikayemiz</h2>
+          </div>
+          <p className="text-muted-foreground leading-relaxed text-base md:text-lg whitespace-pre-line">
+            {story}
+          </p>
+        </section>
+      )}
 
       {/* Misyon & Vizyon */}
       <section className="grid md:grid-cols-2 gap-8">
@@ -24,8 +51,8 @@ export default function AboutPage() {
             </div>
             <CardTitle className="text-2xl">Misyonumuz</CardTitle>
           </CardHeader>
-          <CardContent className="text-muted-foreground leading-relaxed">
-            Akademik sınırların ötesine geçerek öğrencileri pratik ve inovatif projeler etrafında birleştirmek. Teknolojiyi ve işbirliğini kullanarak, üniversite ekosistemini üretken bir kuluçka merkezine dönüştürmek istiyoruz.
+          <CardContent className="text-muted-foreground leading-relaxed text-base whitespace-pre-line">
+            {mission}
           </CardContent>
         </Card>
 
@@ -36,8 +63,8 @@ export default function AboutPage() {
             </div>
             <CardTitle className="text-2xl">Vizyonumuz</CardTitle>
           </CardHeader>
-          <CardContent className="text-muted-foreground leading-relaxed">
-            Sadece bir üniversite kulübü değil, binlerce öğrencinin kariyer yolculuğuna yön veren, start-up ruhunu kampüs kültürüne entegre eden global standartlarda bir yetenek platformu olmak.
+          <CardContent className="text-muted-foreground leading-relaxed text-base whitespace-pre-line">
+            {vision}
           </CardContent>
         </Card>
       </section>
@@ -54,7 +81,7 @@ export default function AboutPage() {
         <div className="grid md:grid-cols-3 gap-6">
           <Card>
             <CardHeader className="text-center pb-2">
-              <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-950/50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Rocket className="w-8 h-8" />
               </div>
               <CardTitle>Kurucu Ekip</CardTitle>
@@ -67,7 +94,7 @@ export default function AboutPage() {
 
           <Card>
             <CardHeader className="text-center pb-2">
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Users className="w-8 h-8" />
               </div>
               <CardTitle>Topluluk Liderleri</CardTitle>
@@ -80,14 +107,14 @@ export default function AboutPage() {
 
           <Card>
             <CardHeader className="text-center pb-2">
-              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-red-100 dark:bg-red-950/50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <ShieldCheck className="w-8 h-8" />
               </div>
               <CardTitle>Moderasyon</CardTitle>
               <CardDescription>Güvenlik & Kalite</CardDescription>
             </CardHeader>
             <CardContent className="text-center text-sm text-muted-foreground">
-              Platformdaki proje ilanlarını, grupları ve mentörlük taleplerini denetleyerek güvenli ve nezih bir ortam sağlayan moderatörlerimiz.
+              Platformdaki proje ilanlarını, toplulukları ve mentörlük taleplerini denetleyerek güvenli ve nezih bir ortam sağlayan moderatörlerimiz.
             </CardContent>
           </Card>
         </div>
@@ -100,7 +127,6 @@ export default function AboutPage() {
           Fikrini projeye dönüştürmek, yeteneklerine uygun bir ekip bulmak veya deneyimlerini paylaşmak için hemen topluluğumuzun bir parçası ol.
         </p>
       </section>
-      
     </div>
   );
 }

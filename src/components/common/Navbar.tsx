@@ -19,7 +19,7 @@ export async function Navbar() {
       .eq('id', user.id)
       .single();
     
-    if (profile?.platform_role === 'admin') {
+    if (profile?.platform_role === 'admin' || profile?.platform_role === 'super_admin') {
       isAdmin = true;
     }
   }
@@ -51,7 +51,7 @@ export async function Navbar() {
               Keşfet
             </Link>
             <Link href="/groups" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
-              Gruplar
+              Topluluklar
             </Link>
             <Link href="/homeworks" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
               Kaynaklar

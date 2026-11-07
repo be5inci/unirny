@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { createClient } from '@/utils/supabase/client';
-import { Loader2, Lock, Unlock } from 'lucide-react';
+import { Loader2, Lock, Unlock, Trash2 } from 'lucide-react';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params);
@@ -28,10 +28,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [project, setProject] = useState<any>(null);
   const [applications, setApplications] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [applyMessage, setApplyMessage] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const supabase = createClient();
 
@@ -39,6 +41,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUser(user);
+
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('platform_role').eq('id', user.id).single();
+      if (profile?.platform_role) {
+        setUserRole(profile.platform_role);
+      }
+    }
 
     // 1. Projeyi çek (join yapmadan, sadece ana veriyi al)
     const { data: projData, error: projError } = await supabase
@@ -111,6 +120,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   async function toggleProjectStatus() {
     if (!currentUser || !isOwner || isTogglingStatus) return;
+    if (userRole === 'viewer') {
+      toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+      return;
+    }
     setIsTogglingStatus(true);
 
     const nextStatus = isOpen ? 'Closed' : 'Open';
@@ -136,9 +149,44 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     }
   }
 
+  async function handleDeleteProject() {
+    if (!currentUser || !isOwner || isDeleting) return;
+    if (userRole === 'viewer') {
+      toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+      return;
+    }
+    const confirmed = window.confirm('Bu projeyi silmek istediğinize emin misiniz?');
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+
+      if (error) {
+        toast.error('Proje silinemedi: ' + error.message);
+      } else {
+        toast.success('Proje başarıyla silindi.');
+        router.push('/projects');
+      }
+    } catch (err: any) {
+      console.error('Proje silme hatası:', err);
+      toast.error('Bir hata oluştu: ' + (err?.message || 'Lütfen tekrar deneyin.'));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   async function handleApply() {
     if (!currentUser) {
       toast.error('Lütfen önce giriş yapın.');
+      return;
+    }
+
+    if (userRole === 'viewer') {
+      toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
       return;
     }
 
@@ -168,6 +216,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   }
 
   async function updateApplicationStatus(appId: string, applicantId: string, status: string) {
+    if (userRole === 'viewer') {
+      toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+      return;
+    }
     const { error } = await supabase
       .from('project_applications')
       .update({ status })
@@ -206,12 +258,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <p className="text-muted-foreground text-lg">{project.summary}</p>
         </div>
         
-        {isOwner ? (
+        {isOwner && userRole !== 'viewer' ? (
           <div className="flex items-center gap-2">
             <Button
               variant={isOpen ? "outline" : "default"}
               size="lg"
-              disabled={isTogglingStatus}
+              disabled={isTogglingStatus || isDeleting}
               onClick={toggleProjectStatus}
               className="font-medium flex items-center gap-2"
             >
@@ -224,6 +276,20 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               )}
               {isOpen ? 'Alımları Kapat' : 'Alımları Aç'}
             </Button>
+            <Button
+              variant="destructive"
+              size="lg"
+              disabled={isDeleting || isTogglingStatus}
+              onClick={handleDeleteProject}
+              className="font-medium flex items-center gap-2"
+            >
+              {isDeleting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              Projeyi Sil
+            </Button>
           </div>
         ) : (
           <div>
@@ -235,10 +301,21 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 }
               </Badge>
             ) : (
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Dialog open={isDialogOpen} onOpenChange={(val) => {
+                if (val && userRole === 'viewer') {
+                  toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+                  return;
+                }
+                setIsDialogOpen(val);
+              }}>
                 <DialogTrigger
                   render={
-                    <Button size="lg" disabled={!isOpen}>
+                    <Button size="lg" disabled={!isOpen} onClick={(e) => {
+                      if (userRole === 'viewer') {
+                        e.preventDefault();
+                        toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+                      }
+                    }}>
                       {isOpen ? 'Projeye Başvur' : 'Alıma Kapalı'}
                     </Button>
                   }

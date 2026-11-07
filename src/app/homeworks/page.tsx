@@ -10,13 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Download as DownloadIcon, UploadCloud, BookOpen, ThumbsUp, Star, ShieldCheck, Eye, X } from 'lucide-react';
+import { Download as DownloadIcon, UploadCloud, BookOpen, ThumbsUp, Star, ShieldCheck, Eye, X, Trash2, Loader2 } from 'lucide-react';
 
 function HomeworksContent() {
   const [homeworks, setHomeworks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   // Filters
   const [searchCode, setSearchCode] = useState('');
@@ -40,6 +41,7 @@ function HomeworksContent() {
 
   // Preview Modal State
   const [previewFile, setPreviewFile] = useState<{ url: string, id: string, name: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -49,7 +51,10 @@ function HomeworksContent() {
     setUser(user);
     if (user) {
       const { data: profile } = await supabase.from('profiles').select('platform_role').eq('id', user.id).single();
-      if (profile && profile.platform_role === 'admin') setIsAdmin(true);
+      if (profile?.platform_role) {
+        setUserRole(profile.platform_role);
+      }
+      if (profile && (profile.platform_role === 'admin' || profile.platform_role === 'super_admin')) setIsAdmin(true);
     }
 
     let query = supabase.from('homeworks').select(`
@@ -124,6 +129,9 @@ function HomeworksContent() {
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return toast.error('Kaynak yüklemek için giriş yapmalısınız.');
+    if (userRole === 'viewer') {
+      return toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+    }
     if (!selectedFile) return toast.error('Lütfen bir dosya seçin.');
     if (!formData.title || !formData.course_code) return toast.error('Başlık ve ders kodu zorunludur.');
 
@@ -195,6 +203,9 @@ function HomeworksContent() {
 
   const handleRate = async (hwId: string, rating: number, isHelpful: boolean, existingRating: any) => {
     if (!user) return toast.error('Değerlendirme yapmak için giriş yapmalısınız.');
+    if (userRole === 'viewer') {
+      return toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+    }
 
     try {
       if (existingRating) {
@@ -226,6 +237,38 @@ function HomeworksContent() {
     }
   };
 
+  const handleDeleteHomework = async (id: string) => {
+    if (!user || deletingId) return;
+    if (userRole === 'viewer') {
+      return toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+    }
+    const confirmed = window.confirm('Bu ilanı/notu silmek istediğinize emin misiniz?');
+    if (!confirmed) return;
+
+    setDeletingId(id);
+    try {
+      const { error } = await supabase
+        .from('homeworks')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        toast.error('İlan/Not silinemedi: ' + error.message);
+      } else {
+        toast.success('İlan/Not başarıyla silindi.');
+        setHomeworks(prev => prev.filter(hw => hw.id !== id));
+        if (previewFile?.id === id) {
+          setPreviewFile(null);
+        }
+      }
+    } catch (err: any) {
+      console.error('Silme hatası:', err);
+      toast.error('Bir hata oluştu: ' + (err?.message || 'Lütfen tekrar deneyin.'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -234,10 +277,21 @@ function HomeworksContent() {
           <p className="text-muted-foreground mt-1">Ders notları, çıkmış sorular ve proje örneklerini keşfedin.</p>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(val) => {
+          if (val && userRole === 'viewer') {
+            toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+            return;
+          }
+          setOpen(val);
+        }}>
           <DialogTrigger
             render={
-              <Button>
+              <Button onClick={(e) => {
+                if (userRole === 'viewer') {
+                  e.preventDefault();
+                  toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+                }
+              }}>
                 <UploadCloud className="w-4 h-4 mr-2" />
                 Yeni Kaynak Yükle
               </Button>
@@ -489,6 +543,23 @@ function HomeworksContent() {
                   </Button>
                 </div>
                 
+                {user?.id === hw.uploader_id && userRole !== 'viewer' && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive flex items-center justify-center gap-1" 
+                    disabled={deletingId === hw.id}
+                    onClick={() => handleDeleteHomework(hw.id)}
+                  >
+                    {deletingId === hw.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    İlanı/Notu Sil
+                  </Button>
+                )}
+
                 {isAdmin && (
                   <Button 
                     variant="ghost" 
@@ -509,10 +580,28 @@ function HomeworksContent() {
       <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
         <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 overflow-hidden">
           <div className="flex justify-between items-center p-4 border-b bg-muted/10">
-            <h3 className="font-semibold">{previewFile?.name}</h3>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPreviewFile(null)}>
-              <X className="w-4 h-4" />
-            </Button>
+            <h3 className="font-semibold truncate max-w-[60%]">{previewFile?.name}</h3>
+            <div className="flex items-center gap-2">
+              {homeworks.find(h => h.id === previewFile?.id)?.uploader_id === user?.id && userRole !== 'viewer' && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-8 text-xs flex items-center gap-1"
+                  disabled={deletingId === previewFile?.id}
+                  onClick={() => previewFile?.id && handleDeleteHomework(previewFile.id)}
+                >
+                  {deletingId === previewFile?.id ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  İlanı/Notu Sil
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPreviewFile(null)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
           <div className="flex-1 w-full h-full bg-secondary/20 relative">
             {previewFile && (

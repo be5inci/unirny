@@ -8,6 +8,7 @@ import { ItemDetailModal } from './ItemDetailModal';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Loader2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { toast } from 'sonner';
 
 interface MarketClientProps {
   initialItems: MarketItem[];
@@ -30,6 +31,19 @@ export function MarketClient({ initialItems, currentUserId }: MarketClientProps)
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MarketItem | null>(null);
+
+  const handleOpenCreateModal = async () => {
+    if (!currentUserId) {
+      toast.error('İlan vermek için giriş yapmalısınız.');
+      return;
+    }
+    const { data: profile } = await supabase.from('profiles').select('platform_role').eq('id', currentUserId).single();
+    if (profile?.platform_role === 'viewer') {
+      toast.error('İzleyici hesabıyla işlem yapamazsınız, yalnızca görüntüleme yetkiniz var.');
+      return;
+    }
+    setIsCreateModalOpen(true);
+  };
 
   const fetchItems = async () => {
     setLoading(true);
